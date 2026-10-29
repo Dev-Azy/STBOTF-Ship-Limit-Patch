@@ -15,3 +15,6 @@ they are not needed to build.
 Change listing
   python3 palgrow_listing.py ORIGINAL.dll > mpr555_changes.txt
 prints every changed location with before/after disassembly. listings/ has the result for all 8 DLLs.
+
+
+--- See PATCH_SPEC.md for more details ---
