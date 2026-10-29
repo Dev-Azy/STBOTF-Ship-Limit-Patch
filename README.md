@@ -17,25 +17,21 @@ The old command-line form with an output file (trek.exe out.exe [capacity]) stil
 
 1. Increase of ship models from 74 to 512
 
- Moves the ship model table of a (possibly already modded) BotF trek.exe into its own PE section ".mdl"
- and raises the number of ship models from 73 (+TMP) to 512 (+TMP).
- 
- All current table contents (including your edits) are carried over. Everything else in the exe stays as is,
- except 3 code sites of the ship model lookup routine, which are checked before anything is changed.
+  moves the ship model table of `trek.exe` (73 entries + TMP, 48 bytes each,
+  VA `0x5919FC`) into a new section `.mdl` with 512 entries + TMP and a 21 byte code cave:
+  
+  - three code sites are checked against the original bytes first: VA `0x4A28AE` (`mov ecx, table`),
+    `0x4A2880` (`mov eax, TMP`) and `0x4A28C6` (the loop `inc ebx; add ecx,30h; cmp ebx,49h; jb`)
+  - the table and TMP addresses are rewritten, the loop jumps to the cave which compares against the new count
+    and jumps back or out
+  - unused slots are filled with name `FF FF FF FF`, so they never match
 
- Details:
+ 2. Increase maximum number of palettes from 127 to 1023
 
- ENTRY = 0x30;
- OLD_TABLE = 0x5919FCL, OLD_TMP = 0x5927ACL;
- OLD_COUNT = 73;
- SITE_BASE = 0x4A28AEL, SITE_TMP = 0x4A2881L, SITE_LOOP = 0x4A28C6L;
- LOOP_BACK = 0x4A28B9L, LOOP_EXIT = 0x4A28CFL;
- CODE_SIZE = 21;
+   Modified mpr*.dll overwrite the ones in the target directory. 
+   
+   More details about the mpr*.dll files, can be found in the tools branch of this repository. 
+   https://github.com/Dev-Azy/stbotf_ship_limit_patch/tree/tools
 
-
- 2. Increase maximum number of palettes from 129 to 1023
-
- Modified mpr*.dll overwrite the ones in the target directory. 
- 
- More details about the mpr*.dll files, can be found in the tools branch of this repository. 
- https://github.com/Dev-Azy/stbotf_ship_limit_patch/tree/tools
+Apply it after any other exe edits. UE9.0.3dev5 reads the table from the `.mdl` section afterwards, not from
+the old file offset.
