@@ -11,3 +11,7 @@ on the ORIGINAL game DLLs. The patched DLLs go into the patcher jar under dll/.
 
 rig.py / exetest.py (+ shipmodels.py) are the emulator test harnesses used to check the result (need unicorn);
 they are not needed to build.
+
+Change listing
+  python3 palgrow_listing.py ORIGINAL.dll > mpr555_changes.txt
+prints every changed location with before/after disassembly. listings/ has the result for all 8 DLLs.

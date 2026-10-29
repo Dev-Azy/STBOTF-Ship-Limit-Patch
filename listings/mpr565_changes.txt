@@ -1,0 +1,571 @@
+BotF software rasterizer - palette limit fix: change listing
+================================================================
+input   : mpr565.dll (123392 bytes)
+records : 1024 (handles 1..1023), original 128 (1..127)
+image   : base 0x10000000, .text VA 0x10001000
+
+Summary of patched pattern kinds
+----------------------------------------------------------------
+  array_base           0x100841e0
+  field_disp           48
+  field_imm            2
+  stride_loop          1
+  chain_final_shl      4
+  chain_interleaved    1
+  new-scan cap         1
+  free-all bound       1
+  key-reset count      1
+  evict wrap           1
+  table clear          1
+  abs_refs_moved       22
+  new_section          ('0x29d000', '0x93c780')
+
+Constants:  record 0x418 bytes (unchanged), old state stride 0x424F0, new stride 0x1278F0
+            fields behind the table move up by 0xE5400 (= (1024-128)*0x418)
+
+Pattern kinds
+  field disp / imm : state-block field behind the palette table, offset + 0xE5400
+  chain imul/nop   : slot*0x424F0 multiply (shl/lea chain) replaced by one imul with the new stride, rest nop
+  slot stride loop : per-slot step of the init loop, new stride
+  new-scan loop    : free-palette search, now N-1 entries with a "table full" exit (returns 0)
+  free-all bound / key-reset count / evict wrap / table clear : loop limits 128 -> N
+
+Code changes in .text  (39 blocks, 322 bytes changed)
+----------------------------------------------------------------
+[1] VA 0x10015172  file 0x14572  (6 bytes)   field disp
+   before
+     10015172  8d 81 f4 0e 02 00      lea eax, [ecx + 0x20ef4]
+   after 
+     10015172  8d 81 f4 62 10 00      lea eax, [ecx + 0x1062f4]
+
+[2] VA 0x100151B0  file 0x145B0  (49 bytes)   field disp
+   before
+     100151B0  8d 91 c4 22 04 00      lea edx, [ecx + 0x422c4]
+     100151B6  89 81 e4 0c 02 00      mov dword ptr [ecx + 0x20ce4], eax
+     100151BC  89 81 f0 0c 02 00      mov dword ptr [ecx + 0x20cf0], eax
+     100151C2  89 81 c8 22 04 00      mov dword ptr [ecx + 0x422c8], eax
+     100151C8  89 81 d4 22 04 00      mov dword ptr [ecx + 0x422d4], eax
+     100151CE  8d 81 dc 0c 02 00      lea eax, [ecx + 0x20cdc]
+     100151D4  5f                     pop edi
+     100151D5  89 81 d4 0c 02 00      mov dword ptr [ecx + 0x20cd4], eax
+     100151DB  89 91 d8 0c 02 00      mov dword ptr [ecx + 0x20cd8], edx
+   after 
+     100151B0  8d 91 c4 76 12 00      lea edx, [ecx + 0x1276c4]
+     100151B6  89 81 e4 60 10 00      mov dword ptr [ecx + 0x1060e4], eax
+     100151BC  89 81 f0 60 10 00      mov dword ptr [ecx + 0x1060f0], eax
+     100151C2  89 81 c8 76 12 00      mov dword ptr [ecx + 0x1276c8], eax
+     100151C8  89 81 d4 76 12 00      mov dword ptr [ecx + 0x1276d4], eax
+     100151CE  8d 81 dc 60 10 00      lea eax, [ecx + 0x1060dc]
+     100151D4  5f                     pop edi
+     100151D5  89 81 d4 60 10 00      mov dword ptr [ecx + 0x1060d4], eax
+     100151DB  89 91 d8 60 10 00      mov dword ptr [ecx + 0x1060d8], edx
+
+[3] VA 0x10015280  file 0x14680  (6 bytes)   field imm
+   before
+     10015280  81 c1 d4 0c 02 00      add ecx, 0x20cd4
+   after 
+     10015280  81 c1 d4 60 10 00      add ecx, 0x1060d4
+
+[4] VA 0x100154CA  file 0x148CA  (6 bytes)   field imm
+   before
+     100154CA  81 c1 d4 0c 02 00      add ecx, 0x20cd4
+   after 
+     100154CA  81 c1 d4 60 10 00      add ecx, 0x1060d4
+
+[5] VA 0x10015C81  file 0x15081  (25 bytes)   chain imul; chain nop
+   before
+     10015C81  c1 e1 05               shl ecx, 5
+     10015C84  03 c8                  add ecx, eax
+     10015C86  8d 14 c8               lea edx, [eax + ecx*8]
+     10015C89  8d 0c 90               lea ecx, [eax + edx*4]
+     10015C8C  c1 e1 04               shl ecx, 4
+     10015C8F  2b c8                  sub ecx, eax
+     10015C91  c1 e1 04               shl ecx, 4
+     10015C94  8d b9 bc 66 0c 10      lea edi, [ecx + 0x100c66bc]
+   after 
+     10015C81  69 c8 f0 78 12 00      imul ecx, eax, 0x1278f0
+     10015C87  90                     nop x13
+     10015C94  8d b9 dc 48 3c 10      lea edi, [ecx + 0x103c48dc]
+
+[6] VA 0x10015E77  file 0x15277  (7 bytes)   field disp
+   before
+     10015E77  f6 80 50 0c 02 00 04   test byte ptr [eax + 0x20c50], 4
+   after 
+     10015E77  f6 80 50 60 10 00 04   test byte ptr [eax + 0x106050], 4
+
+[7] VA 0x100160EA  file 0x154EA  (7 bytes)   field disp
+   before
+     100160EA  f6 82 50 0c 02 00 04   test byte ptr [edx + 0x20c50], 4
+   after 
+     100160EA  f6 82 50 60 10 00 04   test byte ptr [edx + 0x106050], 4
+
+[8] VA 0x1001618E  file 0x1558E  (44 bytes)   field disp; slot stride loop
+   before
+     1001618E  b8 e4 41 08 10         mov eax, 0x100841e4
+     10016193  b9 08 00 00 00         mov ecx, 8
+     10016198  89 68 fc               mov dword ptr [eax - 4], ebp
+     1001619B  89 30                  mov dword ptr [eax], esi
+     1001619D  89 70 08               mov dword ptr [eax + 8], esi
+     100161A0  89 70 2c               mov dword ptr [eax + 0x2c], esi
+     100161A3  89 b0 3c 0c 02 00      mov dword ptr [eax + 0x20c3c], esi
+     100161A9  89 b0 40 0c 02 00      mov dword ptr [eax + 0x20c40], esi
+     100161AF  88 90 d8 24 04 00      mov byte ptr [eax + 0x424d8], dl
+     100161B5  05 f0 24 04 00         add eax, 0x424f0
+   after 
+     1001618E  b8 04 d0 29 10         mov eax, 0x1029d004
+     10016193  b9 08 00 00 00         mov ecx, 8
+     10016198  89 68 fc               mov dword ptr [eax - 4], ebp
+     1001619B  89 30                  mov dword ptr [eax], esi
+     1001619D  89 70 08               mov dword ptr [eax + 8], esi
+     100161A0  89 70 2c               mov dword ptr [eax + 0x2c], esi
+     100161A3  89 b0 3c 60 10 00      mov dword ptr [eax + 0x10603c], esi
+     100161A9  89 b0 40 60 10 00      mov dword ptr [eax + 0x106040], esi
+     100161AF  88 90 d8 78 12 00      mov byte ptr [eax + 0x1278d8], dl
+     100161B5  05 f0 78 12 00         add eax, 0x1278f0
+
+[9] VA 0x100161EB  file 0x155EB  (25 bytes)   chain imul; chain nop
+   before
+     100161EB  c1 e1 05               shl ecx, 5
+     100161EE  03 c8                  add ecx, eax
+     100161F0  8d 14 c8               lea edx, [eax + ecx*8]
+     100161F3  8d 0c 90               lea ecx, [eax + edx*4]
+     100161F6  c1 e1 04               shl ecx, 4
+     100161F9  2b c8                  sub ecx, eax
+     100161FB  c1 e1 04               shl ecx, 4
+     100161FE  39 b1 e0 41 08 10      cmp dword ptr [ecx + 0x100841e0], esi
+   after 
+     100161EB  69 c8 f0 78 12 00      imul ecx, eax, 0x1278f0
+     100161F1  90                     nop x13
+     100161FE  39 b1 00 d0 29 10      cmp dword ptr [ecx + 0x1029d000], esi
+
+[10] VA 0x100162B3  file 0x156B3  (72 bytes)   chain imul; chain nop
+   before
+     100162B3  c1 e2 05               shl edx, 5
+     100162B6  03 d5                  add edx, ebp
+     100162B8  83 c4 04               add esp, 4
+     100162BB  8d 44 d5 00            lea eax, [ebp + edx*8]
+     100162BF  68 60 87 29 10         push 0x10298760
+     100162C4  51                     push ecx
+     100162C5  8d 5c 85 00            lea ebx, [ebp + eax*4]
+     100162C9  c1 e3 04               shl ebx, 4
+     100162CC  2b dd                  sub ebx, ebp
+     100162CE  c1 e3 04               shl ebx, 4
+     100162D1  ff 15 14 70 29 10      call dword ptr [0x10297014]
+     100162D7  8b 15 18 b1 01 10      mov edx, dword ptr [0x1001b118]
+     100162DD  68 50 87 29 10         push 0x10298750
+     100162E2  52                     push edx
+     100162E3  89 83 20 4e 0a 10      mov dword ptr [ebx + 0x100a4e20], eax
+     100162E9  ff 15 14 70 29 10      call dword ptr [0x10297014]
+     100162EF  89 83 24 4e 0a 10      mov dword ptr [ebx + 0x100a4e24], eax
+     100162F5  8b 83 20 4e 0a 10      mov eax, dword ptr [ebx + 0x100a4e20]
+   after 
+     100162B3  90                     nop x5
+     100162B8  83 c4 04               add esp, 4
+     100162BB  90                     nop x4
+     100162BF  68 60 87 29 10         push 0x10298760
+     100162C4  51                     push ecx
+     100162C5  69 dd f0 78 12 00      imul ebx, ebp, 0x1278f0
+     100162CB  90                     nop x6
+     100162D1  ff 15 14 70 29 10      call dword ptr [0x10297014]
+     100162D7  8b 15 18 b1 01 10      mov edx, dword ptr [0x1001b118]
+     100162DD  68 50 87 29 10         push 0x10298750
+     100162E2  52                     push edx
+     100162E3  89 83 40 30 3a 10      mov dword ptr [ebx + 0x103a3040], eax
+     100162E9  ff 15 14 70 29 10      call dword ptr [0x10297014]
+     100162EF  89 83 44 30 3a 10      mov dword ptr [ebx + 0x103a3044], eax
+     100162F5  8b 83 40 30 3a 10      mov eax, dword ptr [ebx + 0x103a3040]
+
+[11] VA 0x10016338  file 0x15738  (70 bytes)   absolute address re-pointed (.reloc entry)
+   before
+     10016338  8d bb 28 4e 0a 10      lea edi, [ebx + 0x100a4e28]
+     1001633E  b9 23 00 00 00         mov ecx, 0x23
+     10016343  8d 93 e0 41 08 10      lea edx, [ebx + 0x100841e0]
+     10016349  f3 a5                  rep movsd dword ptr es:[edi], dword ptr [esi]
+     1001634B  8b 0d 18 b1 01 10      mov ecx, dword ptr [0x1001b118]
+     10016351  8b 7c 24 10            mov edi, dword ptr [esp + 0x10]
+     10016355  c7 02 00 00 00 00      mov dword ptr [edx], 0
+     1001635B  89 83 e8 41 08 10      mov dword ptr [ebx + 0x100841e8], eax
+     10016361  89 ab e4 41 08 10      mov dword ptr [ebx + 0x100841e4], ebp
+     10016367  89 8b 10 42 08 10      mov dword ptr [ebx + 0x10084210], ecx
+     1001636D  83 c9 ff               or ecx, 0xffffffff
+     10016370  33 c0                  xor eax, eax
+     10016372  f2 ae                  repne scasb al, byte ptr es:[edi]
+     10016374  f7 d1                  not ecx
+     10016376  2b f9                  sub edi, ecx
+     10016378  8d 9b bc 66 0c 10      lea ebx, [ebx + 0x100c66bc]
+   after 
+     10016338  8d bb 48 30 3a 10      lea edi, [ebx + 0x103a3048]
+     1001633E  b9 23 00 00 00         mov ecx, 0x23
+     10016343  8d 93 00 d0 29 10      lea edx, [ebx + 0x1029d000]
+     10016349  f3 a5                  rep movsd dword ptr es:[edi], dword ptr [esi]
+     1001634B  8b 0d 18 b1 01 10      mov ecx, dword ptr [0x1001b118]
+     10016351  8b 7c 24 10            mov edi, dword ptr [esp + 0x10]
+     10016355  c7 02 00 00 00 00      mov dword ptr [edx], 0
+     1001635B  89 83 08 d0 29 10      mov dword ptr [ebx + 0x1029d008], eax
+     10016361  89 ab 04 d0 29 10      mov dword ptr [ebx + 0x1029d004], ebp
+     10016367  89 8b 30 d0 29 10      mov dword ptr [ebx + 0x1029d030], ecx
+     1001636D  83 c9 ff               or ecx, 0xffffffff
+     10016370  33 c0                  xor eax, eax
+     10016372  f2 ae                  repne scasb al, byte ptr es:[edi]
+     10016374  f7 d1                  not ecx
+     10016376  2b f9                  sub edi, ecx
+     10016378  8d 9b dc 48 3c 10      lea ebx, [ebx + 0x103c48dc]
+
+[12] VA 0x100163D8  file 0x157D8  (44 bytes)   chain imul; chain nop
+   before
+     100163D8  c1 e1 05               shl ecx, 5
+     100163DB  03 c8                  add ecx, eax
+     100163DD  8d 14 c8               lea edx, [eax + ecx*8]
+     100163E0  8d 34 90               lea esi, [eax + edx*4]
+     100163E3  c1 e6 04               shl esi, 4
+     100163E6  2b f0                  sub esi, eax
+     100163E8  c1 e6 04               shl esi, 4
+     100163EB  8d be e0 41 08 10      lea edi, [esi + 0x100841e0]
+     100163F1  8b cf                  mov ecx, edi
+     100163F3  e8 e8 1b 00 00         call 0x10017fe0
+     100163F8  ff 96 24 4e 0a 10      call dword ptr [esi + 0x100a4e24]
+     100163FE  8b 86 10 42 08 10      mov eax, dword ptr [esi + 0x10084210]
+   after 
+     100163D8  69 f0 f0 78 12 00      imul esi, eax, 0x1278f0
+     100163DE  90                     nop x13
+     100163EB  8d be 00 d0 29 10      lea edi, [esi + 0x1029d000]
+     100163F1  8b cf                  mov ecx, edi
+     100163F3  e8 e8 1b 00 00         call 0x10017fe0
+     100163F8  ff 96 44 30 3a 10      call dword ptr [esi + 0x103a3044]
+     100163FE  8b 86 30 d0 29 10      mov eax, dword ptr [esi + 0x1029d030]
+
+[13] VA 0x10017D47  file 0x17147  (79 bytes)   interleaved chain
+   before
+     10017D47  8b c3                  mov eax, ebx
+     10017D49  8b d3                  mov edx, ebx
+     10017D4B  c1 e0 05               shl eax, 5
+     10017D4E  03 c3                  add eax, ebx
+     10017D50  68 48 01 00 00         push 0x148
+     10017D55  c1 e2 05               shl edx, 5
+     10017D58  8d 0c c3               lea ecx, [ebx + eax*8]
+     10017D5B  03 d3                  add edx, ebx
+     10017D5D  8d 04 8b               lea eax, [ebx + ecx*4]
+     10017D60  8d 0c d3               lea ecx, [ebx + edx*8]
+     10017D63  c1 e0 04               shl eax, 4
+     10017D66  2b c3                  sub eax, ebx
+     10017D68  8d 14 8b               lea edx, [ebx + ecx*4]
+     10017D6B  c1 e0 04               shl eax, 4
+     10017D6E  c1 e2 04               shl edx, 4
+     10017D71  8b 88 ec 41 08 10      mov ecx, dword ptr [eax + 0x100841ec]
+     10017D77  2b d3                  sub edx, ebx
+     10017D79  8d 14 91               lea edx, [ecx + edx*4]
+     10017D7C  89 34 95 f0 41 08 10   mov dword ptr [edx*4 + 0x100841f0], esi
+     10017D83  8b b8 ec 41 08 10      mov edi, dword ptr [eax + 0x100841ec]
+     10017D89  47                     inc edi
+     10017D8A  89 b8 ec 41 08 10      mov dword ptr [eax + 0x100841ec], edi
+     10017D90  8d 80 e0 41 08 10      lea eax, [eax + 0x100841e0]
+   after 
+     10017D47  68 48 01 00 00         push 0x148
+     10017D4C  69 c3 f0 78 12 00      imul eax, ebx, 0x1278f0
+     10017D52  69 d3 90 27 01 00      imul edx, ebx, 0x12790
+     10017D58  90                     nop x25
+     10017D71  8b 88 0c d0 29 10      mov ecx, dword ptr [eax + 0x1029d00c]
+     10017D77  2b d3                  sub edx, ebx
+     10017D79  8d 14 91               lea edx, [ecx + edx*4]
+     10017D7C  89 34 95 10 d0 29 10   mov dword ptr [edx*4 + 0x1029d010], esi
+     10017D83  8b b8 0c d0 29 10      mov edi, dword ptr [eax + 0x1029d00c]
+     10017D89  47                     inc edi
+     10017D8A  89 b8 0c d0 29 10      mov dword ptr [eax + 0x1029d00c], edi
+     10017D90  8d 80 00 d0 29 10      lea eax, [eax + 0x1029d000]
+
+[14] VA 0x10017E25  file 0x17225  (6 bytes)   field disp
+   before
+     10017E25  8b 90 34 0c 02 00      mov edx, dword ptr [eax + 0x20c34]
+   after 
+     10017E25  8b 90 34 60 10 00      mov edx, dword ptr [eax + 0x106034]
+
+[15] VA 0x10017EAA  file 0x172AA  (7 bytes)   field disp
+   before
+     10017EAA  f6 81 50 0c 02 00 08   test byte ptr [ecx + 0x20c50], 8
+   after 
+     10017EAA  f6 81 50 60 10 00 08   test byte ptr [ecx + 0x106050], 8
+
+[16] VA 0x100180F0  file 0x174F0  (7 bytes)   field disp
+   before
+     100180F0  f6 80 50 0c 02 00 08   test byte ptr [eax + 0x20c50], 8
+   after 
+     100180F0  f6 80 50 60 10 00 08   test byte ptr [eax + 0x106050], 8
+
+[17] VA 0x100185A0  file 0x179A0  (6 bytes)   field disp
+   before
+     100185A0  8b 83 38 0c 02 00      mov eax, dword ptr [ebx + 0x20c38]
+   after 
+     100185A0  8b 83 38 60 10 00      mov eax, dword ptr [ebx + 0x106038]
+
+[18] VA 0x100185C4  file 0x179C4  (27 bytes)   field disp
+   before
+     100185C4  89 b3 38 0c 02 00      mov dword ptr [ebx + 0x20c38], esi
+     100185CA  8b c6                  mov eax, esi
+     100185CC  5f                     pop edi
+     100185CD  5e                     pop esi
+     100185CE  5d                     pop ebp
+     100185CF  5b                     pop ebx
+     100185D0  c2 08 00               ret 8
+     100185D3  89 b3 3c 0c 02 00      mov dword ptr [ebx + 0x20c3c], esi
+     100185D9  89 b3 38 0c 02 00      mov dword ptr [ebx + 0x20c38], esi
+   after 
+     100185C4  89 b3 38 60 10 00      mov dword ptr [ebx + 0x106038], esi
+     100185CA  8b c6                  mov eax, esi
+     100185CC  5f                     pop edi
+     100185CD  5e                     pop esi
+     100185CE  5d                     pop ebp
+     100185CF  5b                     pop ebx
+     100185D0  c2 08 00               ret 8
+     100185D3  89 b3 3c 60 10 00      mov dword ptr [ebx + 0x10603c], esi
+     100185D9  89 b3 38 60 10 00      mov dword ptr [ebx + 0x106038], esi
+
+[19] VA 0x100185F6  file 0x179F6  (30 bytes)   new-scan loop (with full check)
+   before
+     100185F6  be 01 00 00 00         mov esi, 1
+     100185FB  8d 83 4c 04 00 00      lea eax, [ebx + 0x44c]
+     10018601  83 38 00               cmp dword ptr [eax], 0
+     10018604  74 0e                  je 0x10018614
+     10018606  46                     inc esi
+     10018607  05 18 04 00 00         add eax, 0x418
+     1001860C  81 fe 80 00 00 00      cmp esi, 0x80
+     10018612  72 ed                  jb 0x10018601
+   after 
+     100185F6  33 f6                  xor esi, esi
+     100185F8  46                     inc esi
+     100185F9  8d 83 4c 04 00 00      lea eax, [ebx + 0x44c]
+     100185FF  b9 ff 03 00 00         mov ecx, 0x3ff
+     10018604  83 38 00               cmp dword ptr [eax], 0
+     10018607  74 0b                  je 0x10018614
+     10018609  46                     inc esi
+     1001860A  05 18 04 00 00         add eax, 0x418
+     1001860F  49                     dec ecx
+     10018610  75 f2                  jne 0x10018604
+     10018612  eb 39                  jmp 0x1001864d
+
+[20] VA 0x10018684  file 0x17A84  (6 bytes)   field disp
+   before
+     10018684  8b af 34 0c 02 00      mov ebp, dword ptr [edi + 0x20c34]
+   after 
+     10018684  8b af 34 60 10 00      mov ebp, dword ptr [edi + 0x106034]
+
+[21] VA 0x100186A4  file 0x17AA4  (31 bytes)   field disp
+   before
+     100186A4  89 87 38 0c 02 00      mov dword ptr [edi + 0x20c38], eax
+     100186AA  3b c3                  cmp eax, ebx
+     100186AC  74 05                  je 0x100186b3
+     100186AE  89 50 2c               mov dword ptr [eax + 0x2c], edx
+     100186B1  eb 06                  jmp 0x100186b9
+     100186B3  89 97 3c 0c 02 00      mov dword ptr [edi + 0x20c3c], edx
+     100186B9  8b 56 28               mov edx, dword ptr [esi + 0x28]
+     100186BC  f6 82 74 0c 02 00 04   test byte ptr [edx + 0x20c74], 4
+   after 
+     100186A4  89 87 38 60 10 00      mov dword ptr [edi + 0x106038], eax
+     100186AA  3b c3                  cmp eax, ebx
+     100186AC  74 05                  je 0x100186b3
+     100186AE  89 50 2c               mov dword ptr [eax + 0x2c], edx
+     100186B1  eb 06                  jmp 0x100186b9
+     100186B3  89 97 3c 60 10 00      mov dword ptr [edi + 0x10603c], edx
+     100186B9  8b 56 28               mov edx, dword ptr [esi + 0x28]
+     100186BC  f6 82 74 60 10 00 04   test byte ptr [edx + 0x106074], 4
+
+[22] VA 0x10018732  file 0x17B32  (6 bytes)   field disp
+   before
+     10018732  8a 85 74 0c 02 00      mov al, byte ptr [ebp + 0x20c74]
+   after 
+     10018732  8a 85 74 60 10 00      mov al, byte ptr [ebp + 0x106074]
+
+[23] VA 0x10018788  file 0x17B88  (52 bytes)   field disp
+   before
+     10018788  8b 86 34 0c 02 00      mov eax, dword ptr [esi + 0x20c34]
+     1001878E  50                     push eax
+     1001878F  ff 15 1c 70 29 10      call dword ptr [0x1029701c]
+     10018795  c7 86 34 0c 02 00 00 00 00 00 mov dword ptr [esi + 0x20c34], 0
+     1001879F  8b 96 38 0c 02 00      mov edx, dword ptr [esi + 0x20c38]
+     100187A5  83 c4 04               add esp, 4
+     100187A8  85 d2                  test edx, edx
+     100187AA  74 14                  je 0x100187c0
+     100187AC  8b cf                  mov ecx, edi
+     100187AE  e8 ad fe ff ff         call 0x10018660
+     100187B3  8b 4f 60               mov ecx, dword ptr [edi + 0x60]
+     100187B6  8b 91 38 0c 02 00      mov edx, dword ptr [ecx + 0x20c38]
+   after 
+     10018788  8b 86 34 60 10 00      mov eax, dword ptr [esi + 0x106034]
+     1001878E  50                     push eax
+     1001878F  ff 15 1c 70 29 10      call dword ptr [0x1029701c]
+     10018795  c7 86 34 60 10 00 00 00 00 00 mov dword ptr [esi + 0x106034], 0
+     1001879F  8b 96 38 60 10 00      mov edx, dword ptr [esi + 0x106038]
+     100187A5  83 c4 04               add esp, 4
+     100187A8  85 d2                  test edx, edx
+     100187AA  74 14                  je 0x100187c0
+     100187AC  8b cf                  mov ecx, edi
+     100187AE  e8 ad fe ff ff         call 0x10018660
+     100187B3  8b 4f 60               mov ecx, dword ptr [edi + 0x60]
+     100187B6  8b 91 38 60 10 00      mov edx, dword ptr [ecx + 0x106038]
+
+[24] VA 0x100187E5  file 0x17BE5  (6 bytes)   absolute address re-pointed (.reloc entry)
+   before
+     100187E5  81 fe 00 0c 02 00      cmp esi, 0x20c00
+   after 
+     100187E5  81 fe 00 60 10 00      cmp esi, 0x106000
+
+[25] VA 0x10018818  file 0x17C18  (6 bytes)   field disp
+   before
+     10018818  8b 81 34 0c 02 00      mov eax, dword ptr [ecx + 0x20c34]
+   after 
+     10018818  8b 81 34 60 10 00      mov eax, dword ptr [ecx + 0x106034]
+
+[26] VA 0x10018840  file 0x17C40  (7 bytes)   field disp
+   before
+     10018840  66 8b 81 74 0c 02 00   mov ax, word ptr [ecx + 0x20c74]
+   after 
+     10018840  66 8b 81 74 60 10 00   mov ax, word ptr [ecx + 0x106074]
+
+[27] VA 0x1001888F  file 0x17C8F  (26 bytes)   field disp; key-reset count
+   before
+     1001888F  f6 81 74 0c 02 00 08   test byte ptr [ecx + 0x20c74], 8
+     10018896  74 31                  je 0x100188c9
+     10018898  6a 00                  push 0
+     1001889A  57                     push edi
+     1001889B  ff 96 3c 01 00 00      call dword ptr [esi + 0x13c]
+     100188A1  8b 47 60               mov eax, dword ptr [edi + 0x60]
+     100188A4  b9 7f 00 00 00         mov ecx, 0x7f
+   after 
+     1001888F  f6 81 74 60 10 00 08   test byte ptr [ecx + 0x106074], 8
+     10018896  74 31                  je 0x100188c9
+     10018898  6a 00                  push 0
+     1001889A  57                     push edi
+     1001889B  ff 96 3c 01 00 00      call dword ptr [esi + 0x13c]
+     100188A1  8b 47 60               mov eax, dword ptr [edi + 0x60]
+     100188A4  b9 ff 03 00 00         mov ecx, 0x3ff
+
+[28] VA 0x100188FC  file 0x17CFC  (6 bytes)   evict wrap
+   before
+     100188FC  81 fd 80 00 00 00      cmp ebp, 0x80
+   after 
+     100188FC  81 fd 00 04 00 00      cmp ebp, 0x400
+
+[29] VA 0x10018979  file 0x17D79  (69 bytes)   field disp
+   before
+     10018979  89 8a 3c 0c 02 00      mov dword ptr [edx + 0x20c3c], ecx
+     1001897F  8b 47 60               mov eax, dword ptr [edi + 0x60]
+     10018982  c7 43 2c 00 00 00 00   mov dword ptr [ebx + 0x2c], 0
+     10018989  8b 88 38 0c 02 00      mov ecx, dword ptr [eax + 0x20c38]
+     1001898F  89 98 38 0c 02 00      mov dword ptr [eax + 0x20c38], ebx
+     10018995  89 4b 30               mov dword ptr [ebx + 0x30], ecx
+     10018998  89 59 2c               mov dword ptr [ecx + 0x2c], ebx
+     1001899B  8b 4f 60               mov ecx, dword ptr [edi + 0x60]
+     1001899E  8b 81 ec 24 04 00      mov eax, dword ptr [ecx + 0x424ec]
+     100189A4  89 43 34               mov dword ptr [ebx + 0x34], eax
+     100189A7  8b 43 10               mov eax, dword ptr [ebx + 0x10]
+     100189AA  f6 c4 01               test ah, 1
+     100189AD  75 23                  jne 0x100189d2
+     100189AF  a8 80                  test al, 0x80
+     100189B1  0f 84 d8 01 00 00      je 0x10018b8f
+     100189B7  f6 81 74 0c 02 00 02   test byte ptr [ecx + 0x20c74], 2
+   after 
+     10018979  89 8a 3c 60 10 00      mov dword ptr [edx + 0x10603c], ecx
+     1001897F  8b 47 60               mov eax, dword ptr [edi + 0x60]
+     10018982  c7 43 2c 00 00 00 00   mov dword ptr [ebx + 0x2c], 0
+     10018989  8b 88 38 60 10 00      mov ecx, dword ptr [eax + 0x106038]
+     1001898F  89 98 38 60 10 00      mov dword ptr [eax + 0x106038], ebx
+     10018995  89 4b 30               mov dword ptr [ebx + 0x30], ecx
+     10018998  89 59 2c               mov dword ptr [ecx + 0x2c], ebx
+     1001899B  8b 4f 60               mov ecx, dword ptr [edi + 0x60]
+     1001899E  8b 81 ec 78 12 00      mov eax, dword ptr [ecx + 0x1278ec]
+     100189A4  89 43 34               mov dword ptr [ebx + 0x34], eax
+     100189A7  8b 43 10               mov eax, dword ptr [ebx + 0x10]
+     100189AA  f6 c4 01               test ah, 1
+     100189AD  75 23                  jne 0x100189d2
+     100189AF  a8 80                  test al, 0x80
+     100189B1  0f 84 d8 01 00 00      je 0x10018b8f
+     100189B7  f6 81 74 60 10 00 02   test byte ptr [ecx + 0x106074], 2
+
+[30] VA 0x10018A07  file 0x17E07  (27 bytes)   field disp
+   before
+     10018A07  f6 80 74 0c 02 00 08   test byte ptr [eax + 0x20c74], 8
+     10018A0E  74 3e                  je 0x10018a4e
+     10018A10  6a 00                  push 0
+     10018A12  57                     push edi
+     10018A13  ff 96 34 01 00 00      call dword ptr [esi + 0x134]
+     10018A19  8b 57 60               mov edx, dword ptr [edi + 0x60]
+     10018A1C  8b 82 3c 0c 02 00      mov eax, dword ptr [edx + 0x20c3c]
+   after 
+     10018A07  f6 80 74 60 10 00 08   test byte ptr [eax + 0x106074], 8
+     10018A0E  74 3e                  je 0x10018a4e
+     10018A10  6a 00                  push 0
+     10018A12  57                     push edi
+     10018A13  ff 96 34 01 00 00      call dword ptr [esi + 0x134]
+     10018A19  8b 57 60               mov edx, dword ptr [edi + 0x60]
+     10018A1C  8b 82 3c 60 10 00      mov eax, dword ptr [edx + 0x10603c]
+
+[31] VA 0x10018A68  file 0x17E68  (6 bytes)   field disp
+   before
+     10018A68  8b b0 3c 0c 02 00      mov esi, dword ptr [eax + 0x20c3c]
+   after 
+     10018A68  8b b0 3c 60 10 00      mov esi, dword ptr [eax + 0x10603c]
+
+[32] VA 0x10018A92  file 0x17E92  (6 bytes)   field disp
+   before
+     10018A92  8b 88 ec 24 04 00      mov ecx, dword ptr [eax + 0x424ec]
+   after 
+     10018A92  8b 88 ec 78 12 00      mov ecx, dword ptr [eax + 0x1278ec]
+
+[33] VA 0x10018AE8  file 0x17EE8  (6 bytes)   field disp
+   before
+     10018AE8  8b b1 3c 0c 02 00      mov esi, dword ptr [ecx + 0x20c3c]
+   after 
+     10018AE8  8b b1 3c 60 10 00      mov esi, dword ptr [ecx + 0x10603c]
+
+[34] VA 0x10018C74  file 0x18074  (5 bytes)   table clear
+   before
+     10018C74  b9 00 83 00 00         mov ecx, 0x8300
+   after 
+     10018C74  b9 00 18 04 00         mov ecx, 0x41800
+
+[35] VA 0x10018C8D  file 0x1808D  (20 bytes)   field disp
+   before
+     10018C8D  89 86 34 0c 02 00      mov dword ptr [esi + 0x20c34], eax
+     10018C93  33 c0                  xor eax, eax
+     10018C95  89 86 38 0c 02 00      mov dword ptr [esi + 0x20c38], eax
+     10018C9B  89 86 3c 0c 02 00      mov dword ptr [esi + 0x20c3c], eax
+   after 
+     10018C8D  89 86 34 60 10 00      mov dword ptr [esi + 0x106034], eax
+     10018C93  33 c0                  xor eax, eax
+     10018C95  89 86 38 60 10 00      mov dword ptr [esi + 0x106038], eax
+     10018C9B  89 86 3c 60 10 00      mov dword ptr [esi + 0x10603c], eax
+
+[36] VA 0x1001925C  file 0x1865C  (6 bytes)   field disp
+   before
+     1001925C  ff 90 ac 0c 02 00      call dword ptr [eax + 0x20cac]
+   after 
+     1001925C  ff 90 ac 60 10 00      call dword ptr [eax + 0x1060ac]
+
+[37] VA 0x100192A3  file 0x186A3  (6 bytes)   field disp
+   before
+     100192A3  ff 91 b0 0c 02 00      call dword ptr [ecx + 0x20cb0]
+   after 
+     100192A3  ff 91 b0 60 10 00      call dword ptr [ecx + 0x1060b0]
+
+[38] VA 0x10019460  file 0x18860  (5 bytes)   absolute address re-pointed (.reloc entry)
+   before
+     10019460  a1 78 4e 0a 10         mov eax, dword ptr [0x100a4e78]
+   after 
+     10019460  a1 98 30 3a 10         mov eax, dword ptr [0x103a3098]
+
+[39] VA 0x1001947E  file 0x1887E  (5 bytes)   absolute address re-pointed (.reloc entry)
+   before
+     1001947E  68 bc 66 0c 10         push 0x100c66bc
+   after 
+     1001947E  68 dc 48 3c 10         push 0x103c48dc
+
+Changes outside .text  (14 bytes)
+----------------------------------------------------------------
+  file 0x0000BC  [header]  4c 01 06 00 -> 4c 01 07 00
+  file 0x000108  [header]  00 d0 29 00 -> 00 a0 bd 00
+  file 0x0002A0  [header]  00 00 00 00 -> 2e 70 61 6c
+  file 0x0002A8  [header]  00 00 00 00 -> 80 c7 93 00
+  file 0x0002AC  [header]  00 00 00 00 -> 00 d0 29 00
+  file 0x0002C4  [header]  00 00 00 00 -> 80 00 00 c0
+
+New section .pal: zero filled, no file data, holds the 8 device state blocks
+  (section header added after the last one, NumberOfSections +1, SizeOfImage grown, checksum cleared)
