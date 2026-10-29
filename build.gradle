@@ -1,0 +1,69 @@
+plugins {
+    // use application plugin for API and implementation separation
+    id 'application'
+}
+
+application {
+    // Set main class for the application jar build.
+    mainClass = 'Patch'
+
+    // Set application name for distribution, to not default to the project name.
+    applicationName = 'STBotF-Ship-Limit-Patch'
+}
+
+java {
+    // Build with JDK 26. Gradle uses an installed JDK 26 or, if the foojay resolver
+    // plugin is configured in settings.gradle, downloads one automatically.
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(26)
+    }
+}
+
+// Configure project build path structure.
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+        }
+        resources {
+            srcDirs = ['res']
+        }
+    }
+    test {
+        java {
+            srcDirs = ['test']
+        }
+    }
+}
+
+// Configure gradle wrapper version to be loaded by the gradle wrapper task.
+tasks.named('wrapper') {
+    gradleVersion = '9.7.1'
+}
+
+// Configure to create one single executable 'fat jar'.
+tasks.named('jar') {
+    // Set jar file name, to not default to the project name.
+    archiveBaseName = 'STBotF-Ship-Limit-Patch'
+
+    // exclude dependency license texts & notes
+    // they are not needed and on merge loose context
+    exclude 'META-INF/LICENSE*'
+    exclude 'META-INF/NOTICE*'
+    // ignore duplicates to fix ikonli 'META-INF/services/org.kordamp.ikonli.IkonHandler'
+    // which is exactly what shadowJar does to get it work
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    // Create manifest specifying the main class to execute.
+    manifest {
+        attributes(
+            'Created-By' : 'Azy',
+            'Main-Class' : 'Patch'
+        )
+    }
+
+    // Configure classpath to include all required library dependencies.
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}

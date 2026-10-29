@@ -12,10 +12,10 @@ import java.util.Arrays;
  * All current table contents (including your edits) are carried over. Everything else in the exe stays as is,
  * except 3 code sites of the ship model lookup routine, which are checked before anything is changed.
  *
- * Usage:  java -jar ShipModelPatcher.jar [trek.exe [output.exe [capacity]]]
+ * Usage:  java -jar STBotF Ship Limit Patch.jar [trek.exe [output.exe [capacity]]]
  *         without arguments a file chooser opens.
  */
-public class ShipModelPatcher {
+public class Patch {
 
   static final int ENTRY = 0x30;
   static final long OLD_TABLE = 0x5919FCL, OLD_TMP = 0x5927ACL;
@@ -196,7 +196,7 @@ public class ShipModelPatcher {
       for (String n : DLLS) {
         File t = new File(dir, n + ".new.tmp");
         tmps.add(t);
-        try (java.io.InputStream in = ShipModelPatcher.class.getResourceAsStream("/dll/" + n)) {
+        try (java.io.InputStream in = Patch.class.getResourceAsStream("/dll/" + n)) {
           if (in == null) throw new IOException("patcher is missing the embedded " + n);
           Files.copy(in, t.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
@@ -253,8 +253,8 @@ public class ShipModelPatcher {
     } else if (args.length == 1) {
       in = new File(args[0]);
     } else {
-      System.out.println("usage: java -jar ShipModelPatcher.jar [trek.exe]   (patches in place, backups as .bak)\n"
-        + "       java -jar ShipModelPatcher.jar trek.exe output.exe [capacity]   (exe only, new file)");
+      System.out.println("usage: java -jar Patch.jar [trek.exe]   (patches in place, backups as .bak)\n"
+        + "       java -jar Patch.jar trek.exe output.exe [capacity]   (exe only, new file)");
       return;
     }
     String title = "BotF patcher";
